@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap"
+        rel="stylesheet">
+    <title>Traductor de Voz a Español</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        button {
+            background-color: #4285F4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 10px 0;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #3367D6;
+        }
+
+        button:disabled {
+            background-color: #9E9E9E;
+            cursor: not-allowed;
+        }
+
+        #status {
+            font-style: italic;
+            color: #666;
+            margin: 10px 0;
+        }
+
+        .result-box {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            background-color: #f9f9f9;
+        }
+
+        .error {
+            color: #D32F2F;
+        }
+
+        .poppins-regular {
+            font-family: "Poppins", sans-serif;
+            font-weight: 600;
+            font-style: normal;
+            background-color: #4286f4af;
+            border-radius: 10px;
+            padding: 25px;
+            text-transform: uppercase;
+            text-align: center;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 class="poppins-regular">Traductor de Voz a Español</h1>
+    <button id="start">🎤 Hablar</button>
+    <div id="status">Presiona el botón y habla en inglés</div>
+
+    <div class="result-box">
+        <p><strong>Frase original:</strong> <span id="original">-</span></p>
+        <p><strong>Traducción:</strong> <span id="translated">-</span></p>
+    </div>
+
+    <script>
+        // Elementos del DOM
+        const btn = document.getElementById('start');
+        const originalText = document.getElementById('original');
+        const translatedText = document.getElementById('translated');
+        const statusElement = document.getElementById('status');
+
+        // Configuración del reconocimiento de voz
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        // Eventos del botón
+        btn.onclick = () => {
+            recognition.start();
+            btn.disabled = true;
+            btn.textContent = "Escuchando...";
+            statusElement.textContent = "Escuchando... habla ahora";
+        };
+
+        // Manejo de resultados
+        recognition.onresult = async (event) => {
+            const transcript = event.results[0][0].transcript;
+            originalText.textContent = transcript;
+            translatedText.textContent = "Traduciendo...";
+            statusElement.textContent = "Procesando tu voz...";
+
+            try {
+                // Intentamos primero con Microsoft Translator (más confiable)
+                const translation = await translateWithMicrosoft(transcript);
+                translatedText.textContent = translation;
+                statusElement.textContent = "Traducción completada";
+
+                // Leer la traducción en voz alta
+                const utterance = new SpeechSynthesisUtterance(translation);
+                utterance.lang = "es-ES";
+                speechSynthesis.speak(utterance);
+
+            } catch (error) {
+                statusElement.textContent = "Intentando con servicio alternativo...";
+
+                // Fallback a MyMemory si Microsoft falla
+                try {
+                    const translation = await translateWithMyMemory(transcript);
+                    translatedText.textContent = translation;
+                    statusElement.textContent = "Traducción completada (servicio alternativo)";
+
+                    const utterance = new SpeechSynthesisUtterance(translation);
+                    utterance.lang = "es-ES";
+                    speechSynthesis.speak(utterance);
+
+                } catch (fallbackError) {
+                    console.error("Error con MyMemory:", fallbackError);
+                    translatedText.textContent = "No se pudo traducir en este momento";
+                    statusElement.textContent = "Error: Todos los servicios de traducción no están disponibles";
+                    statusElement.className = "error";
+                }
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "🎤 Hablar";
+            }
+        };
+
+        recognition.onerror = (event) => {
+            btn.disabled = false;
+            btn.textContent = "🎤 Hablar";
+            statusElement.textContent = "Error de reconocimiento: " + event.error;
+            statusElement.className = "error";
+        };
+
+        // Función de traducción con MyMemory (fallback)
+        async function translateWithMyMemory(text) {
+            const response = await fetch(
+                `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|es`
+            );
+
+            const data = await response.json();
+
+            if (data.responseStatus !== 200 || !data.responseData) {
+                throw new Error(data.responseDetails || "Error en la traducción");
+            }
+
+            return data.responseData.translatedText;
+        }
+    </script>
+</body>
+
+</html>
